@@ -67,7 +67,7 @@ if True:
     dxf_saved_file = os.path.join(script_directory, 'dimstyle')
     
     # 엑셀 파일 경로 설정
-    excel_saved_file = 'c:/python/osel/excel파일'
+    excel_saved_file = 'c:/python/osel/excel_files'
     xlsm_files = glob.glob(os.path.join(excel_saved_file, '*.xlsx'))
     
     # 애플리케이션 경로 설정
@@ -138,17 +138,18 @@ def read_manufacturing_results(sheet, start_row=2):
         "F": "car_width",          # 카 내부 W
         "G": "car_depth",          # 카 내부 D
         "H": "car_height",         # 카 내부 H
-        "I": "interior_material",  # 의장재질
-        "J": "material_thickness", # 재질 두께
-        "K": "panel_number",       # 패널 번호
-        "L": "manufacturing_count", # 제작 대수
-        "M": "panel_type",         # 패널 타입
-        "N": "manufacturing_width", # 제작폭
-        "O": "manufacturing_height", # 제작높이
-        "P": "perforation_width",  # 타공 가로
-        "Q": "perforation_length", # 타공 세로
-        "R": "perforation_height", # 타공 높이(밑기준)
-        "S": "distance_from_entrance" # 입구방향에서 떨어
+        "I": "ipark_check",        # 아이파크 체크
+        "J": "interior_material",  # 의장재질
+        "K": "material_thickness", # 재질 두께
+        "L": "panel_number",       # 패널 번호
+        "M": "manufacturing_count", # 제작 대수
+        "N": "panel_type",         # 패널 타입
+        "O": "manufacturing_width", # 제작폭
+        "P": "manufacturing_height", # 제작높이
+        "Q": "perforation_width",  # 타공 가로
+        "R": "perforation_length", # 타공 세로
+        "S": "perforation_height", # 타공 높이(밑기준)
+        "T": "distance_from_entrance" # 입구방향에서 떨어
     }
 
     # 결과 리스트 초기화
@@ -217,9 +218,9 @@ def show_custom_error(message):
 def log_login():
     """로그인 로그 기록"""
     global global_data, SU
-    company = global_data.get("company", "다완테크")
+    company = global_data.get("company", "오성이엘")
     workplace = global_data.get("workplace", "")
-    url = f"https://8440.co.kr/autopanel/savelog.php?company=다완테크&content=판넬제작_{workplace}_{SU}"
+    url = f"https://8440.co.kr/autopanel/savelog.php?company=오성이엘&content=아이파크 판넬제작_{workplace}_{SU}"
     try:
         response = requests.get(url, timeout=5)
         print(f"로그 전송: {response.status_code}")
@@ -649,7 +650,7 @@ def main():
 
     # .xlsx 파일이 없을 경우 오류 메시지를 출력하고 실행을 중단
     if not xlsm_files:
-        error_message = ".xlsx 파일이 excel파일 폴더에 없습니다. 확인바랍니다."
+        error_message = ".xlsx 파일이 excel_files 폴더에 없습니다. 확인바랍니다."
         show_custom_error(error_message)
         sys.exit(1)
 
@@ -825,7 +826,7 @@ def main():
             thickness = float(re.sub("[A-Z]", "", thickness_string))
         except:
             thickness = 1.5
-        global_data["WorkTitle"] = f"업체명: {global_data.get('company', '다완테크')}, 현장명: {site_name}, thickness: {thickness}"
+        global_data["WorkTitle"] = f"업체명: {global_data.get('company', '오성이엘')}, 현장명: {site_name}, thickness: {thickness}"
 
         execute_panel()
 
@@ -843,12 +844,12 @@ def main():
         cleaned_file_name = f"{cleaned_workplace}_{date_time_str}"
         
         script_directory = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_directory, "작업완료")
+        output_dir = os.path.join(script_directory, "done")
         
-        # 작업완료 폴더가 없으면 생성
+        # done 폴더가 없으면 생성
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-            print(f"작업완료 폴더 생성: {output_dir}")
+            print(f"done 폴더 생성: {output_dir}")
         
         full_file_path = os.path.join(output_dir, f"{cleaned_file_name}.dxf")
         global_data["file_name"] = full_file_path
