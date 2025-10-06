@@ -38,26 +38,69 @@ dxf_saved_file = os.path.join(application_path, 'dimstyle')
 excel_saved_file = os.path.join(application_path, 'excel_files')
 xlsm_files = glob.glob(os.path.join(excel_saved_file, '*.xlsx'))
 
-# DXF 초기화
-try:
-    doc = new()
-    msp = doc.modelspace()
-except Exception as e:
-    print(f"DXF 초기화 오류: {e}")
-    doc = None
-    msp = None
-
-# style.dxf 로드 시도
-try:
-    if readfile is not None and os.path.exists(os.path.join(dxf_saved_file, 'style.dxf')):
-        doc = readfile(os.path.join(dxf_saved_file, 'style.dxf'))
+# DXF 초기화 함수
+def initialize_dxf():
+    """새로운 DXF 문서를 초기화하고 스타일을 설정하는 함수"""
+    global doc, msp, text_style_name, selected_dimstyle, over1000dim_style
+    
+    # 새로운 DXF 문서 생성
+    try:
+        doc = new()
         msp = doc.modelspace()
-        selected_dimstyle = 'over1000'
-        over1000dim_style = 'over1000'
-    else:
-        print("style.dxf 파일을 찾을 수 없습니다.")
-except Exception as e:
-    print(f"style.dxf 로드 오류: {e}")
+    except Exception as e:
+        print(f"DXF 초기화 오류: {e}")
+        doc = None
+        msp = None
+        return False
+
+    # style.dxf 로드 시도
+    style_dxf_path = os.path.join(dxf_saved_file, 'style.dxf')
+    
+    try:
+        if readfile is not None and os.path.exists(style_dxf_path):
+            doc = readfile(style_dxf_path)
+            msp = doc.modelspace()
+            
+            # 사용 가능한 텍스트 스타일 확인
+            available_textstyles = [style.dxf.name for style in doc.styles]
+            
+            # 사용 가능한 치수 스타일 확인
+            available_dimstyles = [dim.dxf.name for dim in doc.dimstyles]
+            
+            # 한글 폰트가 포함된 textstyle 우선 선택
+            if 'JKW' in available_textstyles:
+                text_style_name = 'JKW'  # gulim.ttc 한글 폰트
+            elif 'mydim1' in available_textstyles:
+                text_style_name = 'mydim1'  # gulim.ttc 한글 폰트
+            elif 'H' in available_textstyles:
+                text_style_name = 'H'
+            else:
+                text_style_name = 'Standard'
+            
+            # style.dxf에 정의된 dimstyle이 있으면 사용 (한글 폰트 우선)
+            if 'mydim1' in available_dimstyles:
+                selected_dimstyle = 'mydim1'  # JKW textstyle (gulim.ttc) 사용
+                over1000dim_style = 'mydim1'
+            elif 'over1000dim1' in available_dimstyles:
+                selected_dimstyle = 'over1000dim1'
+                over1000dim_style = 'over1000dim1'
+            else:
+                selected_dimstyle = 'Standard'
+                over1000dim_style = 'Standard'
+        else:
+            print("style.dxf 파일을 찾을 수 없습니다.")
+            # 기본 스타일 설정
+            text_style_name = 'Standard'
+            selected_dimstyle = 'Standard'
+            over1000dim_style = 'Standard'
+    except Exception as e:
+        print(f"style.dxf 로드 오류: {e}")
+        # 기본 스타일 설정
+        text_style_name = 'Standard'
+        selected_dimstyle = 'Standard'
+        over1000dim_style = 'Standard'
+    
+    return True
 
 # 제작산출결과 데이터 읽기 함수
 def read_manufacturing_results(sheet, start_row=2):
@@ -198,8 +241,8 @@ def draw_Text(doc, x, y, size, text, layer=None, alignment=TextEntityAlignment.B
     if layer is None:
         layer = '0'
     try:
-        # dawan_jamb.py와 동일한 방식으로 텍스트 스타일 설정
-        text_style_name = selected_dimstyle  # 치수선 스타일을 텍스트 스타일로 사용
+        # 전역에서 설정된 텍스트 스타일 사용
+        global text_style_name
         
         # 텍스트 추가 및 생성된 Text 객체 가져오기
         text_entity = msp.add_text(
@@ -207,7 +250,7 @@ def draw_Text(doc, x, y, size, text, layer=None, alignment=TextEntityAlignment.B
             dxfattribs={
                 'height': size, 
                 'layer': layer,
-                'style': text_style_name  # 치수선 스타일을 텍스트 스타일로 사용
+                'style': text_style_name  # 전역에서 설정된 텍스트 스타일 사용
             }
         )
         text_entity.set_placement((x, y), align=alignment)
@@ -290,8 +333,9 @@ def draw_table(doc, msp, panels_data, start_x, start_y, manufacturing_count):
 
 def draw_dimension_line(doc, x1, y1, x2, y2, distance, text, layer=None):
     """치수선 그리기 (스타일 적용)"""
+    global selected_dimstyle
     if layer is None:
-        layer = selected_dimstyle
+        layer = 'DIM'
     try:
         # 치수선 그리기 (실제 ezdxf 치수선 사용)
         if abs(x2 - x1) > abs(y2 - y1):  # 수평 치수선
@@ -578,33 +622,15 @@ def main():
             show_custom_error(error_message)
             sys.exit(1)
 
-        try:
-            if readfile is not None:
-                doc = readfile(os.path.join(dxf_saved_file, 'style.dxf'))
-                msp = doc.modelspace()
-            else:
-                raise AttributeError("readfile 함수를 사용할 수 없습니다.")
-        except (AttributeError, FileNotFoundError) as e:
-            try:
-                if new is not None:
-                    doc = new()
-                    if readfile is not None and os.path.exists(os.path.join(dxf_saved_file, 'style.dxf')):
-                        doc = readfile(os.path.join(dxf_saved_file, 'style.dxf'))
-                    msp = doc.modelspace()
-                else:
-                    error_message = "ezdxf new 함수를 사용할 수 없습니다."
-                    show_custom_error(error_message)
-                    return
-            except Exception as e:
-                error_message = f"DXF 파일 로드 오류: {str(e)}"
-                show_custom_error(error_message)
-                return
-        except Exception as e:
-            error_message = f"DXF 파일을 읽을 수 없습니다: {str(e)}"
+        # 각 엑셀 파일마다 새로운 DXF 문서 초기화
+        if not initialize_dxf():
+            error_message = "DXF 초기화에 실패했습니다."
             show_custom_error(error_message)
-            return
-
-        # TEXTSTYLE과 dimstyle은 이미 전역에서 설정됨
+            continue
+        
+        # pageCount 초기화 (각 엑셀 파일마다)
+        global pageCount
+        pageCount = 0
 
         # thickness_string만 읽어오기 (thickness 계산용)
         thickness_string = read_excel_value(sheet, "B4")
