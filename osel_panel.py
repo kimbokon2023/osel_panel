@@ -1,129 +1,63 @@
-# 2025/10/01 다완테크 판넬제작 자동작도 프로그램 신규 작성
-import math
+# 2025/10/01 오성이엘 판넬제작 자동작도 프로그램
 import ezdxf
 from ezdxf.filemanagement import readfile, new
 from ezdxf.enums import TextEntityAlignment
 import openpyxl
 import os
 import glob
-import time
 import sys
 import io
 from datetime import datetime
-import json
 import re
-import logging
-import warnings
-import tkinter as tk
-from tkinter import font
 import requests
-from gooey import Gooey, GooeyParser
+from gooey import GooeyParser
 
 # 전역 변수 초기화
-if True:
-    global_data = {}
-    BasicXscale, BasicYscale, TargetXscale, TargetYscale, frame_scale = 0, 0, 0, 0, 0
-    frameXpos = 0
-    frameYpos = 0    
-    thickness = 0
-    selected_dimstyle = ''
-    over1000dim_style = ''
-    br = 0  # bending rate 신호
-    saved_DimXpos = 0
-    saved_DimYpos = 0
-    saved_Xpos = 0
-    saved_Ypos = 0
-    saved_direction = "up"
-    saved_text_height = 0.60
-    saved_text_gap = 0.07
-    saved_dim_style = ''
-    pageCount = 0
-    SU = 0
-    exit_program = False
-    program_message = ''
-    text_style_name = ''
-    selected_dimstyle = ''
-    over1000dim_style = ''
-
-    # 전역 변수 선언 및 초기화
-    for i in range(1, 31):
-        globals()[f'x{i}'] = 0
-        globals()[f'y{i}'] = 0        
-
-    # 전역 변수 선언 및 초기화
-    for i in range(1, 12):
-        globals()[f'P{i}_platewidth'] = 0
-        globals()[f'P{i}_plateheight'] = 0
-        globals()[f'P{i}_hole'] = []
+global_data = {}
+pageCount = 0
+SU = 0
+selected_dimstyle = ''
+over1000dim_style = ''
+text_style_name = ''
+thickness = 0
 
 # 기본 설정
-if True:
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')    
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 파일 경로 설정
-if True:
-    script_directory = os.path.dirname(os.path.abspath(__file__))
-    dxf_saved_file = os.path.join(script_directory, 'dimstyle')
-    
-    # 엑셀 파일 경로 설정
-    excel_saved_file = 'c:/python/osel/excel_files'
-    xlsm_files = glob.glob(os.path.join(excel_saved_file, '*.xlsx'))
-    
-    # 애플리케이션 경로 설정
-    application_path = script_directory
-    license_file_path = os.path.join(application_path, 'data', 'hdsettings.json')
+if getattr(sys, 'frozen', False):
+    # PyInstaller로 빌드된 실행 파일인 경우
+    application_path = os.path.dirname(sys.executable)
+else:
+    # 스크립트로 실행하는 경우
+    application_path = os.path.dirname(os.path.abspath(__file__))
 
-# 기본 설정
-if True:
-    try:
-        doc = new()
+# 폴더 경로 설정
+dxf_saved_file = os.path.join(application_path, 'dimstyle')
+excel_saved_file = os.path.join(application_path, 'excel_files')
+xlsm_files = glob.glob(os.path.join(excel_saved_file, '*.xlsx'))
+
+# DXF 초기화
+try:
+    doc = new()
+    msp = doc.modelspace()
+except Exception as e:
+    print(f"DXF 초기화 오류: {e}")
+    doc = None
+    msp = None
+
+# style.dxf 로드 시도
+try:
+    if readfile is not None and os.path.exists(os.path.join(dxf_saved_file, 'style.dxf')):
+        doc = readfile(os.path.join(dxf_saved_file, 'style.dxf'))
         msp = doc.modelspace()
-    except Exception as e:
-        print(f"DXF 초기화 오류: {e}")
-        doc = None
-        msp = None
-
-    try:
-        if readfile is not None and os.path.exists(os.path.join(dxf_saved_file, 'style.dxf')):
-            doc = readfile(os.path.join(dxf_saved_file, 'style.dxf'))
-            msp = doc.modelspace()
-            selected_dimstyle = 'over1000'
-            over1000dim_style = 'over1000'
-        else:
-            print("style.dxf 파일을 찾을 수 없습니다.")
-    except Exception as e:
-        print(f"style.dxf 로드 오류: {e}")
-
-    # TEXTSTYLE 정의 (한글 처리를 위한)
-    text_style_name = 'H'  # 원하는 텍스트 스타일 이름
-    if 'doc' in locals() and doc is not None:
-        if text_style_name not in doc.styles:
-            text_style = doc.styles.new(
-                name=text_style_name,
-                dxfattribs={
-                    'font': 'Arial.ttf',  # TrueType 글꼴 파일명            
-                }
-            )
-        else:
-            text_style = doc.styles.get(text_style_name)
-
-    # dimstyle 매핑 설정
-    dimstyle_map = {
-        'dim1': 'mydim1',
-        'dim2': 'mydim2',
-        'dim3': 'mydim3',
-        'dim4': 'mydim4'
-    }
-    over1000dim_style_map = { 
-        'dim1': 'over1000dim1', 
-        'dim2': 'over1000dim2', 
-        'dim3': 'over1000dim3', 
-        'dim4': 'over1000dim4'
-    }        
-    # selected_dimstyle과 over1000dim_style 설정
-    selected_dimstyle = dimstyle_map.get('dim1', 'mydim1')  # 기본값은 'mydim1'
-    over1000dim_style = over1000dim_style_map.get('dim1', 'over1000dim1')  # 기본값은 'over1000dim1'
+        selected_dimstyle = 'over1000'
+        over1000dim_style = 'over1000'
+    else:
+        print("style.dxf 파일을 찾을 수 없습니다.")
+except Exception as e:
+    print(f"style.dxf 로드 오류: {e}")
 
 # 제작산출결과 데이터 읽기 함수
 def read_manufacturing_results(sheet, start_row=2):
@@ -228,7 +162,7 @@ def log_login():
         print("로그 전송 실패")
 
 def parse_arguments():
-    """Gooey 인수 파싱"""
+    """인수 파싱"""
     parser = GooeyParser()
     group1 = parser.add_argument_group('카판옵션')
     group1.add_argument('--opt1', action='store_true', default=True, help='기본')
@@ -389,36 +323,11 @@ def draw_dimension_line(doc, x1, y1, x2, y2, distance, text, layer=None):
         except Exception as e2:
             print(f"폴백 치수선 그리기 오류: {e2}")
 
-def insert_frame(x, y, scale, title, description, workplaceStr, sep="NOtable"):
-    """도면틀 삽입"""
-    try:
-        # 기본 도면틀 그리기
-        frame_width = 8000 * scale
-        frame_height = 6000 * scale
-        
-        # 외곽선
-        rectangle(doc, x, y, x + frame_width, y + frame_height, layer='0')
-        
-        # 제목
-        draw_Text(doc, x + frame_width/2 - 100, y + frame_height - 100, 50, title, layer='0')
-        draw_Text(doc, x + frame_width/2 - 150, y + frame_height - 150, 30, description, layer='0')
-        draw_Text(doc, x + frame_width/2 - 100, y + frame_height - 180, 25, workplaceStr, layer='0')
-        
-        print(f"도면틀 삽입 완료: {title}")
-    except Exception as e:
-        print(f"도면틀 삽입 오류: {e}")
 
 # 제작산출결과 기반 판넬제작 도면 생성 함수
 def execute_panel(): 
     """제작산출결과 기반 판넬제작 도면 생성 함수"""
     global global_data, doc, msp, pageCount
-    global company, drawnby, workplace, issuedate
-
-    # ===================== (1) 기본 정보 세팅 =====================
-    company = global_data.get("company", "다완테크")
-    drawnby = global_data.get("drawnby", "시스템")
-    workplace = global_data.get("workplace", "현장명")
-    issuedate = global_data.get("issuedate", datetime.now().strftime('%Y-%m-%d'))
 
     # ===================== (2) 제작산출결과 데이터 가져오기 =====================
     manufacturing_data = global_data.get("manufacturing_data", [])
@@ -638,8 +547,6 @@ def execute_panel():
 
 # 메인 함수
 def main():
-    global args
-    global exit_program, program_message, text_style_name
     global SU
     global global_data, doc, msp
 
@@ -650,7 +557,7 @@ def main():
 
     # .xlsx 파일이 없을 경우 오류 메시지를 출력하고 실행을 중단
     if not xlsm_files:
-        error_message = ".xlsx 파일이 excel_files 폴더에 없습니다. 확인바랍니다."
+        error_message = f".xlsx 파일이 {excel_saved_file} 폴더에 없습니다. 확인바랍니다."
         show_custom_error(error_message)
         sys.exit(1)
 
@@ -697,56 +604,12 @@ def main():
             show_custom_error(error_message)
             return
 
-        # TEXTSTYLE 정의 (한글 처리를 위한)
-        text_style_name = 'H'  # 원하는 텍스트 스타일 이름
-        if 'doc' in locals() and doc is not None:
-            if text_style_name not in doc.styles:
-                text_style = doc.styles.new(
-                    name=text_style_name,
-                    dxfattribs={
-                        'font': 'Arial.ttf',  # TrueType 글꼴 파일명            
-                    }
-                )
-            else:
-                text_style = doc.styles.get(text_style_name)
+        # TEXTSTYLE과 dimstyle은 이미 전역에서 설정됨
 
-        # dimstyle 매핑 설정
-        dimstyle_map = {
-            'dim1': 'mydim1',
-            'dim2': 'mydim2',
-            'dim3': 'mydim3',
-            'dim4': 'mydim4'
-        }
-        over1000dim_style_map = { 
-            'dim1': 'over1000dim1', 
-            'dim2': 'over1000dim2', 
-            'dim3': 'over1000dim3', 
-            'dim4': 'over1000dim4'
-        }        
-        # selected_dimstyle과 over1000dim_style 설정
-        selected_dimstyle = dimstyle_map.get('dim1', 'mydim1')  # 기본값은 'mydim1'
-        over1000dim_style = over1000dim_style_map.get('dim1', 'over1000dim1')  # 기본값은 'over1000dim1'
-
-        variable_names = {
-            "B2": "company",
-            "E2": "drawnby",
-            "B3": "workplace",
-            "E3": "issuedate",
-            "B4": "thickness_string",
-            "E4": "HPI_Type",
-            "B5": "usage",
-            "F5": "HPI_punchWidth",
-            "G5": "HPI_punchHeight",
-            "I5": "HPI_holeGap",
-            "N5": "HPI_punchWidth_update",
-            "O5": "HPI_punchHeight_update",
-            "Q5": "HPI_holeGap_update"
-        }
-
-        for cell_ref, var_name in variable_names.items():
-            value = read_excel_value(sheet, cell_ref)
-            global_data[var_name] = value
-            globals()[var_name] = value
+        # thickness_string만 읽어오기 (thickness 계산용)
+        thickness_string = read_excel_value(sheet, "B4")
+        if thickness_string:
+            global_data["thickness_string"] = thickness_string
 
         # 제작산출결과 데이터 읽기
         global_data["manufacturing_data"] = read_manufacturing_results(sheet)
@@ -843,8 +706,8 @@ def main():
         # 파일명 생성: 현장명_날짜시간
         cleaned_file_name = f"{cleaned_workplace}_{date_time_str}"
         
-        script_directory = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_directory, "done")
+        # 현재 실행 위치 기준으로 done 폴더 설정
+        output_dir = os.path.join(application_path, "done")
         
         # done 폴더가 없으면 생성
         if not os.path.exists(output_dir):
@@ -854,18 +717,7 @@ def main():
         full_file_path = os.path.join(output_dir, f"{cleaned_file_name}.dxf")
         global_data["file_name"] = full_file_path
 
-        exit_program = False
-        program_message = '''
-        프로그램 실행결과입니다.
-        -------------------------------------
-        {0}
-        -------------------------------------
-        이용해 주셔서 감사합니다.
-        '''
-        args = parse_arguments()
-
         log_login()
-
         doc.saveas(global_data["file_name"])
         print(f" 저장 파일명: '{global_data['file_name']}' 저장 완료!")
 
