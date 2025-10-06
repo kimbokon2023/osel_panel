@@ -34,7 +34,7 @@ if True:
     saved_Xpos = 0
     saved_Ypos = 0
     saved_direction = "up"
-    saved_text_height = 0.38
+    saved_text_height = 0.60
     saved_text_gap = 0.07
     saved_dim_style = ''
     pageCount = 0
@@ -126,7 +126,7 @@ if True:
     over1000dim_style = over1000dim_style_map.get('dim1', 'over1000dim1')  # 기본값은 'over1000dim1'
 
 # 제작산출결과 데이터 읽기 함수
-def read_manufacturing_results(sheet, start_row=3):
+def read_manufacturing_results(sheet, start_row=2):
     """제작산출결과 시트에서 데이터를 읽어오는 함수"""
     # 제작산출결과 시트의 열과 변수 매핑
     column_mapping = {
@@ -258,7 +258,7 @@ def rectangle(doc, x1, y1, dx, dy, layer=None, offset=None):
         line(doc, dx, dy, x1, dy, layer=layer)   
         line(doc, x1, dy, x1, y1, layer=layer)
 
-def draw_Text(doc, x, y, size, text, layer=None):
+def draw_Text(doc, x, y, size, text, layer=None, alignment=TextEntityAlignment.BOTTOM_LEFT):
     """텍스트 그리기 (한글 지원)"""
     if layer is None:
         layer = '0'
@@ -275,7 +275,7 @@ def draw_Text(doc, x, y, size, text, layer=None):
                 'style': text_style_name  # 치수선 스타일을 텍스트 스타일로 사용
             }
         )
-        text_entity.set_placement((x, y), align=TextEntityAlignment.BOTTOM_LEFT)
+        text_entity.set_placement((x, y), align=alignment)
     except Exception as e:
         print(f"텍스트 그리기 오류: {e}")
 
@@ -316,10 +316,9 @@ def draw_table(doc, msp, panels_data, start_x, start_y, manufacturing_count):
         
         current_y -= TABLE_ROW_HEIGHT  # 데이터 행으로 이동
         
-        # 데이터 행 그리기
+        # 데이터 행 그리기 (표 시퀀스는 1~9로 연속 표기)
         for panel_data in panels_data:
-            panel_number_excel = panel_data.get('panel_number', 0)
-            display_panel_number = panel_number_excel - 1  # 엑셀 번호를 도면 번호로 변환
+            display_panel_number = panel_data.get('display_number', 1)  # 표시용 번호 사용
             
             w = int(panel_data.get('manufacturing_width', 0))
             h = int(panel_data.get('manufacturing_height', 0))
@@ -333,7 +332,7 @@ def draw_table(doc, msp, panels_data, start_x, start_y, manufacturing_count):
                 remarks = "도면참조"
             
             row_data = [
-                f"#{int(display_panel_number)}",  # 정수로 표시
+                f"#{int(display_panel_number)}",  # 1부터 9까지 연속 표기
                 str(w),
                 str(h),
                 f"{quantity} EA",
@@ -363,7 +362,7 @@ def draw_dimension_line(doc, x1, y1, x2, y2, distance, text, layer=None):
         if abs(x2 - x1) > abs(y2 - y1):  # 수평 치수선
             dimension = msp.add_linear_dim(
                 dimstyle=selected_dimstyle,
-                base=(x1, y1 + 50),  # 치수선 위치 (위쪽으로)
+                base=(x1, y1 + 100),  # 치수선 위치 (위쪽으로)
                 p1=(x1, y1),
                 p2=(x2, y2),
                 dxfattribs={'layer': layer}
@@ -371,7 +370,7 @@ def draw_dimension_line(doc, x1, y1, x2, y2, distance, text, layer=None):
         else:  # 수직 치수선
             dimension = msp.add_linear_dim(
                 dimstyle=selected_dimstyle,
-                base=(x1 - 50, y1),  # 치수선 위치 (왼쪽으로)
+                base=(x1 - 100, y1),  # 치수선 위치 (왼쪽으로)
                 angle=90,
                 p1=(x1, y1),
                 p2=(x2, y2),
@@ -385,7 +384,7 @@ def draw_dimension_line(doc, x1, y1, x2, y2, distance, text, layer=None):
             # 치수 텍스트 추가
             mid_x = (x1 + x2) / 2
             mid_y = (y1 + y2) / 2
-            draw_Text(doc, mid_x, mid_y - 20, 20, text, layer=layer)
+            draw_Text(doc, mid_x, mid_y - 20, 100, text, layer=layer)
         except Exception as e2:
             print(f"폴백 치수선 그리기 오류: {e2}")
 
@@ -461,15 +460,49 @@ def execute_panel():
             # border_height = car_height + 200  # 카 높이 + 여백
             # rectangle(doc, rx, startYpos, rx + border_width, startYpos + border_height, layer='0')
             
-            # 패널 2번부터 10번까지 필터링 및 정렬 (9개 패널)
-            panels_2_to_10 = []
+            # 패널 1번부터 9번까지 준비 (엑셀 2번부터 10번에 해당)
+            panels_1_to_9 = []
             for panel_data in panels:
                 panel_number = panel_data.get('panel_number', 0)
                 if 2 <= panel_number <= 10:
-                    panels_2_to_10.append(panel_data)
+                    panels_1_to_9.append(panel_data)
             
             # 패널 번호순으로 정렬
-            panels_2_to_10.sort(key=lambda x: x.get('panel_number', 0))
+            panels_1_to_9.sort(key=lambda x: x.get('panel_number', 0))
+            
+            # 9개 패널을 모두 표시하기 위해 누락된 패널을 빈 패널로 추가
+            # 엑셀 데이터에 없는 패널은 빈 패널로 추가하여 항상 9개 패널 표시
+            all_panels = []
+            
+            # 엑셀 2번부터 10번까지 9개 슬롯에 패널 배치
+            for excel_panel_num in range(2, 11):  # 엑셀 2번부터 10번까지
+                found_panel = None
+                for panel_data in panels_1_to_9:
+                    if panel_data.get('panel_number', 0) == excel_panel_num:
+                        found_panel = panel_data
+                        break
+                
+                if found_panel:
+                    # 실제 패널 데이터가 있는 경우
+                    all_panels.append(found_panel)
+                else:
+                    # 패널 데이터가 없는 경우 빈 패널 추가
+                    empty_panel = {
+                        'panel_number': excel_panel_num,
+                        'manufacturing_width': 0,
+                        'manufacturing_height': manufacturing_height,
+                        'site_name': site_name
+                    }
+                    all_panels.append(empty_panel)
+            
+            # 1~9로 재번호 매기기
+            actual_panels = []
+            for i, panel_data in enumerate(all_panels, start=1):
+                new_panel = panel_data.copy()
+                new_panel['display_number'] = i  # 표시용 번호 (1~9)
+                actual_panels.append(new_panel)
+            
+            panels_1_to_9 = actual_panels
             
             # 각 패널별 도면 그리기 (패널 2번부터 10번까지)
             panel_start_x = 6100  # 기존 패널들을 X좌표 6000만큼 오른쪽으로 이동
@@ -477,107 +510,127 @@ def execute_panel():
             # 고유번호별로 Y좌표 오프셋 적용 (두 번째 고유번호부터 5000씩 낮게)
             unique_id_index = list(unique_ids.keys()).index(unique_id)
             y_offset = unique_id_index * 5000  # 첫 번째는 0, 두 번째는 5000, 세 번째는 10000...
-            panel_start_y = 100 + y_offset
+            
+            # 테이블 높이 계산 (헤더 1행 + 데이터 9행 = 10행)
+            TABLE_ROW_HEIGHT = 250
+            table_height = TABLE_ROW_HEIGHT * 10  # 10행의 높이
+            
+            # 테이블 시작점 계산
+            table_start_y_temp = 100 + manufacturing_height + 350 + y_offset
+            
+            # 패널 Y 기준점을 테이블 하단과 맞추고 2500 위로 올리기
+            panel_start_y = table_start_y_temp - table_height + 2500
             
             current_x = panel_start_x
             
-            # 현장 정보 텍스트 출력 (Y좌표를 위로 올리고 행 간격 더 넓게 확대, 모든 글자 크기 20% 축소)
-            draw_Text(doc, 50, panel_start_y + manufacturing_height + 1100, 120, f"현장명: {site_name}", layer='0')  # 첫 Y 시작점 100 올림
-            draw_Text(doc, 50, panel_start_y + manufacturing_height + 900, 120, f"제작 대수: {int(manufacturing_count)}대", layer='0')  # 간격 200으로 확대
+            # 현장 정보 텍스트 출력 (고정된 위치, 패널 위치와 무관하게)
+            fixed_text_y = 100 + y_offset  # 고정된 Y 위치 (패널 위치와 무관)
+            draw_Text(doc, 50, fixed_text_y + manufacturing_height + 1100, 120, f"현장명: {site_name}", layer='0')
+            draw_Text(doc, 50, fixed_text_y + manufacturing_height + 900, 120, f"제작 대수: {int(manufacturing_count)}대", layer='0')
             
             # 카 내부 치수 정보 출력 (소수점 제거, mm 제거, 현장명과 동일한 크기)
-            draw_Text(doc, 50, panel_start_y + manufacturing_height + 700, 120, f"카 내부 치수: {int(car_width)} x {int(car_depth)} x {int(car_height)}", layer='0')
-            draw_Text(doc, 50, panel_start_y + manufacturing_height + 500, 120, f"제작높이: {int(manufacturing_height)}", layer='0')
+            draw_Text(doc, 50, fixed_text_y + manufacturing_height + 700, 120, f"카 내부 치수: {int(car_width)} x {int(car_depth)} x {int(car_height)}", layer='0')
+            draw_Text(doc, 50, fixed_text_y + manufacturing_height + 500, 120, f"제작높이: {int(manufacturing_height)}", layer='0')
             
-            for panel_data in panels_2_to_10:
+            for panel_data in panels_1_to_9:
                 panel_number = panel_data.get('panel_number', 0)
                 manufacturing_width = panel_data.get('manufacturing_width', 0)
                 panel_height = manufacturing_height
                 
-                # 엑셀의 2번부터 10번 패널을 도면에서는 1번부터 9번으로 표시
-                display_panel_number = panel_number - 1
+                # 도면 표기 번호는 display_number 사용
+                display_panel_number = panel_data.get('display_number', 1)
                 
                 print(f"패널 {panel_number} → {display_panel_number} 그리기: 너비 {manufacturing_width}mm, 높이 {panel_height}mm")
                 
-                # 패널 외곽선 그리기 (4개의 점을 연결하는 사각형)
-                rectangle(doc, current_x, panel_start_y, current_x + manufacturing_width, panel_start_y + panel_height, layer='레이져')
+                # 모든 패널을 도면에 그리기 (빈 패널도 포함)
+                panel_width = max(manufacturing_width, 100)  # 최소 100mm 폭으로 빈 패널도 표시
                 
-                # 패널 번호를 패널 높이 중심에서 400 높은 위치에 표시 (레이져 레이어, 문자 크기 2배)
-                panel_center_y = panel_start_y + panel_height / 2
-                draw_Text(doc, current_x + manufacturing_width/2 - 10, panel_center_y + 400, 125, f"#{int(display_panel_number)}", layer='레이져')  # 62.5 * 2 = 125
+                # 패널 외곽선 그리기 (Y좌표계 수정: 아래로 그리기)
+                rectangle(doc, current_x, panel_start_y, current_x + panel_width, panel_start_y - panel_height, layer='레이져')
                 
-                # 패널 폭 치수선을 패널 위에 표시
-                draw_dimension_line(doc, current_x, panel_start_y + panel_height, 
-                                  current_x + manufacturing_width, panel_start_y + panel_height, 
-                                  manufacturing_width, f"{int(manufacturing_width)}", layer='DIM')
+                # 패널 번호를 패널의 정확한 중심에 표시 (레이져 레이어, 문자 크기 2배, 중앙 정렬)
+                panel_center_x = current_x + panel_width / 2
+                panel_center_y = panel_start_y - panel_height / 2 + 400  # 패널 높이 중심에서 400 높게
+                draw_Text(doc, panel_center_x, panel_center_y, 125, f"#{int(display_panel_number)}", layer='레이져', alignment=TextEntityAlignment.BOTTOM_CENTER)  # 62.5 * 2 = 125
                 
-                # 타공 정보가 있으면 표시
-                perforation_width = panel_data.get('perforation_width', 0)
-                perforation_length = panel_data.get('perforation_length', 0)
-                perforation_height = panel_data.get('perforation_height', 0)
-                distance_from_entrance = panel_data.get('distance_from_entrance', 0)
+                # 패널 폭 치수선을 패널 위에 표시 (실제 제작폭이 있는 경우만)
+                if manufacturing_width > 0:
+                    draw_dimension_line(doc, current_x, panel_start_y, 
+                                      current_x + panel_width, panel_start_y, 
+                                      manufacturing_width, f"{int(manufacturing_width)}", layer='DIM')
                 
-                if perforation_width > 0 and perforation_length > 0:
-                    # 타공 위치 계산 (패널 하단에서 위쪽으로)
-                    hole_x = current_x + distance_from_entrance
-                    hole_y = panel_start_y + panel_height - perforation_height
+                # 타공 정보가 있으면 표시 (실제 제작폭이 있는 경우만)
+                if manufacturing_width > 0:
+                    perforation_width = panel_data.get('perforation_width', 0)
+                    perforation_length = panel_data.get('perforation_length', 0)
+                    perforation_height = panel_data.get('perforation_height', 0)
+                    distance_from_entrance = panel_data.get('distance_from_entrance', 0)
                     
-                    # 타공 사각형 그리기
-                    rectangle(doc, hole_x, hole_y, hole_x + perforation_width, hole_y + perforation_length, layer='레이져')
-                    
-                    # 타공 내부에 X 표시
-                    cross_x = hole_x + perforation_width / 2
-                    cross_y = hole_y + perforation_length / 2
-                    cross_size = min(perforation_width, perforation_length) * 0.8
-                    draw_cross_mark(doc, cross_x, cross_y, cross_size, layer='레이져')
-                    
-                    # 타공 치수선들
-                    # 타공 폭 치수선
-                    draw_dimension_line(doc, hole_x, hole_y - 50, 
-                                      hole_x + perforation_width, hole_y - 50, 
-                                      perforation_width, f"{int(perforation_width)}", layer='DIM')
-                    
-                    # 타공 높이 치수선
-                    draw_dimension_line(doc, hole_x - 50, hole_y, 
-                                      hole_x - 50, hole_y + perforation_length, 
-                                      perforation_length, f"{int(perforation_length)}", layer='DIM')
-                    
-                    # 타공 위치 치수선들
-                    # 왼쪽 여백
-                    draw_dimension_line(doc, current_x, hole_y + perforation_length/2, 
-                                      hole_x, hole_y + perforation_length/2, 
-                                      distance_from_entrance, f"{int(distance_from_entrance)}", layer='DIM')
-                    
-                    # 오른쪽 여백
-                    right_margin = manufacturing_width - distance_from_entrance - perforation_width
-                    draw_dimension_line(doc, hole_x + perforation_width, hole_y + perforation_length/2, 
-                                      current_x + manufacturing_width, hole_y + perforation_length/2, 
-                                      right_margin, f"{int(right_margin)}", layer='DIM')
-                    
-                    # 하단 여백
-                    bottom_margin = perforation_height
-                    draw_dimension_line(doc, hole_x + perforation_width/2, panel_start_y + panel_height, 
-                                      hole_x + perforation_width/2, hole_y + perforation_length, 
-                                      bottom_margin, f"{int(bottom_margin)}", layer='DIM')
+                    if perforation_width > 0 and perforation_length > 0:
+                        # 타공 위치 계산 (패널 중심에 타공 배치, Y좌표계 수정)
+                        # 타공을 패널의 수평 중심에 배치
+                        equal_margin = (manufacturing_width - perforation_width) / 2
+                        hole_x = current_x + equal_margin
+                        # 타공을 하단에 배치 (Y좌표계: 아래쪽이 음수)
+                        hole_y = panel_start_y - panel_height + perforation_height + perforation_length
+                        
+                        # 타공 사각형 그리기 (Y좌표계 수정: 아래로 그리기)
+                        rectangle(doc, hole_x, hole_y, hole_x + perforation_width, hole_y - perforation_length, layer='레이져')
+                        
+                        # 타공 내부에 대각선 X 표시 (좌측 상단-우측 하단, 좌측 하단-우측 상단)
+                        msp = doc.modelspace()
+                        # 첫 번째 대각선: 좌측 상단 -> 우측 하단
+                        msp.add_line((hole_x, hole_y - perforation_length), (hole_x + perforation_width, hole_y), dxfattribs={'layer': '0', 'color': 1}) # Red color
+                        # 두 번째 대각선: 좌측 하단 -> 우측 상단  
+                        msp.add_line((hole_x, hole_y), (hole_x + perforation_width, hole_y - perforation_length), dxfattribs={'layer': '0', 'color': 1}) # Red color
+                        
+                        # 타공 치수선들 (Y좌표계 수정, 정확한 계산과 위치)
+                        
+                        # equal_margin은 이미 위에서 계산됨
+                        
+                        # 1. 타공 폭 치수선 (타공 상단에서 50mm 위에 위치)
+                        draw_dimension_line(doc, hole_x, hole_y , 
+                                          hole_x + perforation_width, hole_y , 
+                                          perforation_width, f"{int(perforation_width)}", layer='DIM')
+                        
+                        # 2. 좌우 여백 치수선 (타공 하단에 위치)
+                        # 왼쪽 여백 (균등 계산)
+                        draw_dimension_line(doc, current_x, hole_y  , 
+                                          hole_x, hole_y  , 
+                                          equal_margin, f"{int(equal_margin)}", layer='DIM')
+                        
+                        # 오른쪽 여백 (균등 계산)
+                        draw_dimension_line(doc, hole_x + perforation_width, hole_y, 
+                                          current_x + manufacturing_width, hole_y, 
+                                          equal_margin, f"{int(equal_margin)}", layer='DIM')
+                        
+                        # 3. 타공 높이 치수선 (타공 좌측에 위치, edge에 정확히 맞춤)
+                        draw_dimension_line(doc, hole_x , hole_y, 
+                                          hole_x , hole_y - perforation_length, 
+                                          perforation_length, f"{int(perforation_length)}", layer='DIM')
+                        
+                        # 4. 하단 거리 (바닥에서 타공 하단까지의 거리)
+                        bottom_distance = perforation_height + perforation_length
+                        draw_dimension_line(doc, hole_x + perforation_width/2, panel_start_y - panel_height, 
+                                          hole_x + perforation_width/2, hole_y - perforation_length, 
+                                          bottom_distance, f"{int(bottom_distance)}", layer='DIM')
                 
-                # 다음 패널 위치로 이동
-                current_x += manufacturing_width + 300  # 패널 간격 300mm
+                # 다음 패널 위치로 이동 (빈 패널도 공간 확보)
+                current_x += panel_width + 300  # 패널 간격 300mm
             
-            # 전체 높이 치수선을 첫 번째 패널 왼쪽에 그리기
-            if panels_2_to_10:
-                first_panel = panels_2_to_10[0]
-                first_panel_width = first_panel.get('manufacturing_width', 0)
+            # 전체 높이 치수선을 첫 번째 패널 왼쪽에 그리기 (Y좌표계 수정)
+            if panels_1_to_9:
                 # 첫 번째 패널의 왼쪽에 수직 치수선
                 draw_dimension_line(doc, panel_start_x, panel_start_y, 
-                                  panel_start_x, panel_start_y + manufacturing_height, 
+                                  panel_start_x, panel_start_y - manufacturing_height, 
                                   manufacturing_height, f"{int(manufacturing_height)}", layer='DIM')
             
             # 각 현장마다 상세 내역 테이블 그리기 (현장 정보 아래에 배치)
             # 테이블을 9개 패널로 확장 (1번부터 9번까지)
-            panels_for_table = panels_2_to_10[:9]  # 처음 9개 패널 사용
+            panels_for_table = panels_1_to_9[:9]  # 처음 9개 패널 사용
             
             table_start_x = 50
-            table_start_y = panel_start_y + manufacturing_height + 350  # 현장 정보와 충돌하지 않도록 조정
+            table_start_y = table_start_y_temp  # 계산된 테이블 시작점 사용
             draw_table(doc, msp, panels_for_table, table_start_x, table_start_y, manufacturing_count)
     else:
         print("제작산출결과 데이터가 없습니다. 도면을 생성하지 않습니다.")
@@ -601,11 +654,13 @@ def main():
         sys.exit(1)
 
     for file_path in xlsm_files:
+        workbook = None
         try:
             workbook = openpyxl.load_workbook(file_path, data_only=True)
         except Exception as e:
             error_message = f"엑셀 파일을 열 수 없습니다: {str(e)}"
             show_custom_error(error_message)
+            continue
 
         # 제작산출결과 시트만 읽기
         try:
@@ -695,19 +750,75 @@ def main():
         # 제작산출결과 데이터 읽기
         global_data["manufacturing_data"] = read_manufacturing_results(sheet)
 
-        # 제작산출결과 시트에서 현장명 가져오기 (C열, 마지막 행)
-        site_name = None
+        # 제작산출결과 시트에서 현장명들 가져오기 (C열, 모든 행)
+        site_names = []
         row = 3  # 데이터 시작 행
         while True:
             cell_value = sheet[f"C{row}"].value
             if cell_value is None or cell_value == "":
                 break
-            site_name = str(cell_value)  # 마지막으로 읽은 현장명 저장
+            site_names.append(str(cell_value))
             row += 1
         
+        # 중복 제거 및 정렬
+        unique_site_names = list(set(site_names))
+        unique_site_names.sort()
+        
         # 현장명이 없으면 기본값 사용
-        if site_name is None:
+        if not unique_site_names:
             site_name = "현장명"
+        else:
+            # 공통 접두사 찾기 (단어 단위로 구분하여 더 정확하게)
+            if len(unique_site_names) >= 2:
+                # 첫 번째 현장명을 기준으로 공통 접두사 찾기
+                base_name = unique_site_names[0]
+                common_prefix = ""
+                
+                # 단어 단위로 분리하여 공통 접두사 찾기
+                base_words = base_name.split('#')
+                if len(base_words) > 1:
+                    # '#' 이전 부분을 공통 접두사로 사용
+                    common_prefix = base_words[0]
+                    
+                    # 각 현장명에서 공통 접두사 제거하고 나머지 부분 추출
+                    remaining_parts = []
+                    for name in unique_site_names:
+                        if name.startswith(common_prefix):
+                            remaining = name[len(common_prefix):]
+                            if remaining:  # 빈 문자열이 아닌 경우만 추가
+                                remaining_parts.append(remaining)
+                        else:
+                            remaining_parts.append(name)
+                    
+                    # 공통 접두사 + 나머지 부분들 합치기
+                    if remaining_parts:
+                        site_name = common_prefix + "_".join(remaining_parts)
+                    else:
+                        site_name = common_prefix
+                else:
+                    # '#'이 없는 경우 기존 로직 사용
+                    min_length = min(len(name) for name in unique_site_names)
+                    for i in range(min_length):
+                        if all(name[i] == unique_site_names[0][i] for name in unique_site_names):
+                            common_prefix += unique_site_names[0][i]
+                        else:
+                            break
+                    
+                    remaining_parts = []
+                    for name in unique_site_names:
+                        if name.startswith(common_prefix):
+                            remaining = name[len(common_prefix):]
+                            if remaining:
+                                remaining_parts.append(remaining)
+                        else:
+                            remaining_parts.append(name)
+                    
+                    if remaining_parts:
+                        site_name = common_prefix + "_".join(remaining_parts)
+                    else:
+                        site_name = common_prefix
+            else:
+                site_name = unique_site_names[0]
 
         thickness_string = global_data.get("thickness_string", "1.5T")
         try:
