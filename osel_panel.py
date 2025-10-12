@@ -115,18 +115,19 @@ def read_manufacturing_results(sheet, start_row=2):
         "F": "car_width",          # 카 내부 W
         "G": "car_depth",          # 카 내부 D
         "H": "car_height",         # 카 내부 H
-        "I": "ipark_check",        # 아이파크 체크
-        "J": "interior_material",  # 의장재질
-        "K": "material_thickness", # 재질 두께
-        "L": "panel_number",       # 패널 번호
-        "M": "manufacturing_count", # 제작 대수
-        "N": "panel_type",         # 패널 타입
-        "O": "manufacturing_width", # 제작폭
-        "P": "manufacturing_height", # 제작높이
-        "Q": "perforation_width",  # 타공 가로
-        "R": "perforation_length", # 타공 세로
-        "S": "perforation_height", # 타공 높이(밑기준)
-        "T": "distance_from_entrance" # 입구방향에서 떨어
+        "I": "car_structure",      # 카 구조 (일반형, 관통형)
+        "J": "ipark_check",        # 아이파크 체크
+        "K": "interior_material",  # 의장재질
+        "L": "material_thickness", # 재질 두께
+        "M": "panel_number",       # 패널 번호
+        "N": "manufacturing_count", # 제작 대수
+        "O": "panel_type",         # 패널 타입
+        "P": "manufacturing_width", # 제작폭
+        "Q": "manufacturing_height", # 제작높이
+        "R": "perforation_width",  # 타공 가로
+        "S": "perforation_length", # 타공 세로
+        "T": "perforation_height", # 타공 높이(밑기준)
+        "U": "distance_from_entrance" # 입구방향에서 떨어
     }
 
     # 결과 리스트 초기화
@@ -414,49 +415,76 @@ def execute_panel():
             # border_height = car_height + 200  # 카 높이 + 여백
             # rectangle(doc, rx, startYpos, rx + border_width, startYpos + border_height, layer='0')
             
-            # 패널 1번부터 9번까지 준비 (엑셀 2번부터 10번에 해당)
-            panels_1_to_9 = []
-            for panel_data in panels:
-                panel_number = panel_data.get('panel_number', 0)
-                if 2 <= panel_number <= 10:
-                    panels_1_to_9.append(panel_data)
+            # car_structure 값 확인 (일반형 vs 관통형)
+            car_structure = first_panel.get('car_structure', '일반형')
             
-            # 패널 번호순으로 정렬
-            panels_1_to_9.sort(key=lambda x: x.get('panel_number', 0))
-            
-            # 9개 패널을 모두 표시하기 위해 누락된 패널을 빈 패널로 추가
-            # 엑셀 데이터에 없는 패널은 빈 패널로 추가하여 항상 9개 패널 표시
-            all_panels = []
-            
-            # 엑셀 2번부터 10번까지 9개 슬롯에 패널 배치
-            for excel_panel_num in range(2, 11):  # 엑셀 2번부터 10번까지
-                found_panel = None
-                for panel_data in panels_1_to_9:
-                    if panel_data.get('panel_number', 0) == excel_panel_num:
-                        found_panel = panel_data
-                        break
+            # 패널 준비 로직 (car_structure에 따라 다르게 처리)
+            if car_structure == '관통형':
+                # 관통형: 2, 3, 4, 8, 9, 10번 패널만 사용 (5, 6, 7번 제거)
+                valid_panel_numbers = [2, 3, 4, 8, 9, 10]
+                panels_to_display = []
                 
-                if found_panel:
-                    # 실제 패널 데이터가 있는 경우
-                    all_panels.append(found_panel)
-                else:
-                    # 패널 데이터가 없는 경우 빈 패널 추가
-                    empty_panel = {
-                        'panel_number': excel_panel_num,
-                        'manufacturing_width': 0,
-                        'manufacturing_height': manufacturing_height,
-                        'site_name': site_name
-                    }
-                    all_panels.append(empty_panel)
-            
-            # 1~9로 재번호 매기기
-            actual_panels = []
-            for i, panel_data in enumerate(all_panels, start=1):
-                new_panel = panel_data.copy()
-                new_panel['display_number'] = i  # 표시용 번호 (1~9)
-                actual_panels.append(new_panel)
-            
-            panels_1_to_9 = actual_panels
+                for panel_data in panels:
+                    panel_number = panel_data.get('panel_number', 0)
+                    if panel_number in valid_panel_numbers:
+                        panels_to_display.append(panel_data)
+                
+                # 패널 번호순으로 정렬
+                panels_to_display.sort(key=lambda x: x.get('panel_number', 0))
+                
+                # 1~6으로 재번호 매기기 (연속 번호)
+                actual_panels = []
+                for i, panel_data in enumerate(panels_to_display, start=1):
+                    new_panel = panel_data.copy()
+                    new_panel['display_number'] = i  # 표시용 번호 (1~6)
+                    actual_panels.append(new_panel)
+                
+                panels_1_to_9 = actual_panels
+                
+            else:
+                # 일반형: 기존 로직 (엑셀 2~10번 → 표시 #1~#9)
+                panels_1_to_9 = []
+                for panel_data in panels:
+                    panel_number = panel_data.get('panel_number', 0)
+                    if 2 <= panel_number <= 10:
+                        panels_1_to_9.append(panel_data)
+                
+                # 패널 번호순으로 정렬
+                panels_1_to_9.sort(key=lambda x: x.get('panel_number', 0))
+                
+                # 9개 패널을 모두 표시하기 위해 누락된 패널을 빈 패널로 추가
+                # 엑셀 데이터에 없는 패널은 빈 패널로 추가하여 항상 9개 패널 표시
+                all_panels = []
+                
+                # 엑셀 2번부터 10번까지 9개 슬롯에 패널 배치
+                for excel_panel_num in range(2, 11):  # 엑셀 2번부터 10번까지
+                    found_panel = None
+                    for panel_data in panels_1_to_9:
+                        if panel_data.get('panel_number', 0) == excel_panel_num:
+                            found_panel = panel_data
+                            break
+                    
+                    if found_panel:
+                        # 실제 패널 데이터가 있는 경우
+                        all_panels.append(found_panel)
+                    else:
+                        # 패널 데이터가 없는 경우 빈 패널 추가
+                        empty_panel = {
+                            'panel_number': excel_panel_num,
+                            'manufacturing_width': 0,
+                            'manufacturing_height': manufacturing_height,
+                            'site_name': site_name
+                        }
+                        all_panels.append(empty_panel)
+                
+                # 1~9로 재번호 매기기
+                actual_panels = []
+                for i, panel_data in enumerate(all_panels, start=1):
+                    new_panel = panel_data.copy()
+                    new_panel['display_number'] = i  # 표시용 번호 (1~9)
+                    actual_panels.append(new_panel)
+                
+                panels_1_to_9 = actual_panels
             
             # 각 패널별 도면 그리기 (패널 2번부터 10번까지)
             panel_start_x = 6100  # 기존 패널들을 X좌표 6000만큼 오른쪽으로 이동
@@ -465,9 +493,14 @@ def execute_panel():
             unique_id_index = list(unique_ids.keys()).index(unique_id)
             y_offset = unique_id_index * 5000  # 첫 번째는 0, 두 번째는 5000, 세 번째는 10000...
             
-            # 테이블 높이 계산 (헤더 1행 + 데이터 9행 = 10행)
+            # 테이블 높이 계산 (car_structure에 따라 다르게 계산)
             TABLE_ROW_HEIGHT = 250
-            table_height = TABLE_ROW_HEIGHT * 10  # 10행의 높이
+            if car_structure == '관통형':
+                # 헤더 1행 + 데이터 6행 = 7행
+                table_height = TABLE_ROW_HEIGHT * 7
+            else:
+                # 헤더 1행 + 데이터 9행 = 10행
+                table_height = TABLE_ROW_HEIGHT * 10
             
             # 테이블 시작점 계산
             table_start_y_temp = 100 + manufacturing_height + 350 + y_offset
@@ -580,8 +613,13 @@ def execute_panel():
                                   manufacturing_height, f"{int(manufacturing_height)}", layer='DIM')
             
             # 각 현장마다 상세 내역 테이블 그리기 (현장 정보 아래에 배치)
-            # 테이블을 9개 패널로 확장 (1번부터 9번까지)
-            panels_for_table = panels_1_to_9[:9]  # 처음 9개 패널 사용
+            # car_structure에 따라 테이블 패널 개수 결정
+            if car_structure == '관통형':
+                # 관통형: 6개 패널 표시 (#1~#6)
+                panels_for_table = panels_1_to_9[:6]
+            else:
+                # 일반형: 9개 패널 표시 (#1~#9)
+                panels_for_table = panels_1_to_9[:9]
             
             table_start_x = 50
             table_start_y = table_start_y_temp  # 계산된 테이블 시작점 사용
