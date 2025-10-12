@@ -298,16 +298,17 @@ def draw_table(doc, msp, panels_data, start_x, start_y, manufacturing_count):
         # 데이터 행 그리기 (표 시퀀스는 1~9로 연속 표기)
         for panel_data in panels_data:
             display_panel_number = panel_data.get('display_number', 1)  # 표시용 번호 사용
+            excel_panel_number = panel_data.get('panel_number', 0)  # 원본 엑셀 패널 번호
             
             w = int(panel_data.get('manufacturing_width', 0))
             h = int(panel_data.get('manufacturing_height', 0))
             quantity = int(manufacturing_count)  # 실제 제작수량 사용
             
-            # 특정 패널 비고 설정
+            # 특정 패널 비고 설정 (엑셀 원본 번호 기준)
             remarks = ""
-            if display_panel_number == 5:  # 패널 #5 (엑셀 #6)
+            if excel_panel_number == 6:  # 엑셀 #6 → 일반형에서만 #5로 표시되며 "MIRROR"
                 remarks = "MIRROR"
-            elif display_panel_number == 8:  # 패널 #8 (엑셀 #9)
+            elif excel_panel_number == 9:  # 엑셀 #9 → 일반형 #8, 관통형 #5에 "도면참조"
                 remarks = "도면참조"
             
             row_data = [
